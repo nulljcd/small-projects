@@ -1,0 +1,14 @@
+[gd_resource type="StandardMaterial3D" load_steps=2 format=3 uid="uid://dklnhfcwu55la"]
+
+[ext_resource type="Texture2D" uid="uid://d2qjtffhn1vd5" path="res://textures/the_orb.png" id="1_34l2i"]
+
+[resource]
+transparency = 1
+albedo_texture = ExtResource("1_34l2i")
+emission_enabled = true
+emission_energy_multiplier = 0.5
+emission_texture = ExtResource("1_34l2i")
+uv1_offset = Vector3(0.5, 0.5, 0.5)
+uv1_triplanar = true
+texture_filter = 0
+billboard_mode = 1

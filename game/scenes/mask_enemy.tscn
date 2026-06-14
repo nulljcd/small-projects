@@ -1,0 +1,38 @@
+[gd_scene load_steps=6 format=3 uid="uid://dhvxsl1h038cs"]
+
+[ext_resource type="ArrayMesh" uid="uid://dnm5yp284jmty" path="res://models/mask_enemy/mesh_0.obj" id="2_wpumk"]
+[ext_resource type="ArrayMesh" uid="uid://jekp2g1us5cn" path="res://models/mask_enemy/mesh_1.obj" id="3_1v530"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_2ho0w"]
+transparency = 1
+albedo_color = Color(0, 0, 0, 0.627451)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_v3a0g"]
+emission_enabled = true
+emission = Color(0.36531338, 0.2812, 0.74, 1)
+emission_energy_multiplier = 1.5
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_2ho0w"]
+radius = 0.3984375
+height = 1.2114258
+
+[node name="MaskEnemy" type="Node3D"]
+
+[node name="Mesh0" type="MeshInstance3D" parent="."]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 0, 0, 0.19978893)
+material_override = SubResource("StandardMaterial3D_2ho0w")
+mesh = ExtResource("2_wpumk")
+
+[node name="Mesh1" type="MeshInstance3D" parent="."]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 0, 0, 0.19978893)
+material_override = SubResource("StandardMaterial3D_v3a0g")
+mesh = ExtResource("3_1v530")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+visible = false
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.017, 0)
+shape = SubResource("CapsuleShape3D_2ho0w")

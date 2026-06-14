@@ -1,0 +1,29 @@
+[gd_scene load_steps=4 format=3 uid="uid://cseu8bo651hsq"]
+
+[ext_resource type="ArrayMesh" uid="uid://jekp2g1us5cn" path="res://models/mask_enemy/mesh_1.obj" id="1_dabuj"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dabuj"]
+albedo_color = Color(0, 0, 0, 1)
+emission_enabled = true
+emission = Color(0.4131, 0.459405, 0.81, 1)
+emission_energy_multiplier = 1.5
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_dabuj"]
+radius = 0.35631934
+
+[node name="EyesEnemy" type="Node3D"]
+
+[node name="Mesh1" type="MeshInstance3D" parent="."]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 0, -0.15107074, 0.03457102)
+material_override = SubResource("StandardMaterial3D_dabuj")
+mesh = ExtResource("1_dabuj")
+
+[node name="Node3D" type="Node3D" parent="."]
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+visible = false
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+shape = SubResource("SphereShape3D_dabuj")

@@ -1,0 +1,33 @@
+[gd_scene load_steps=5 format=3 uid="uid://bmx1tandbwvmp"]
+
+[ext_resource type="Script" uid="uid://cwj7an68tml7f" path="res://scripts/finger_projectile.gd" id="1_k4147"]
+[ext_resource type="ArrayMesh" uid="uid://cqvnvagptkb5b" path="res://models/finger_projectile.obj" id="2_0v47c"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_v82y4"]
+albedo_color = Color(1, 0.74509805, 0.92941177, 1)
+emission_enabled = true
+emission = Color(1, 0.74509805, 0.92941177, 1)
+emission_energy_multiplier = 0.5
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_0qhcv"]
+radius = 0.1
+
+[node name="FingerProjectile" type="Node3D"]
+script = ExtResource("1_k4147")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+material_override = SubResource("StandardMaterial3D_v82y4")
+mesh = ExtResource("2_0v47c")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+collision_layer = 16
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+shape = SubResource("SphereShape3D_0qhcv")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="."]
+light_color = Color(1, 0.74509805, 0.92941177, 1)
+light_energy = 0.05
+omni_range = 10.0
+omni_attenuation = 2.0
