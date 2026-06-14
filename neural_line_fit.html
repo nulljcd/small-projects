@@ -1,0 +1,720 @@
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>neural_fit</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #323348;
+    }
+
+    .container {
+      display: flex;
+      height: calc(10 * 32);
+    }
+
+    canvas {
+      display: block;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="main">
+    <div class="container">
+      <canvas id="function_visual"></canvas>
+    </div>
+    <div class="container">
+      <canvas id="model_visual"></canvas>
+      <canvas id="activation_visual"></canvas>
+    </div>
+  </div>
+  <script>
+    const Random = class {
+      // https://stackoverflow.com/questions/25582882/javascript-math-random-normal-distribution-gaussian-bell-curve
+      static normal() {
+        return Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+      }
+
+      static shuffle(data) {
+        const arr = data.slice();
+
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+
+        return arr;
+      }
+    }
+
+    const MachineLearning = class {
+      static Activation = class {
+        static Linear = class {
+          compute(z) {
+            const output = new Float32Array(z.length);
+            for (let j = 0; j < z.length; j++) {
+              const x = z[j];
+              output[j] = x;
+            }
+            return output;
+          }
+
+          derivative(z) {
+            const output = new Float32Array(z.length);
+            for (let j = 0; j < z.length; j++) {
+              output[j] = 1;
+            }
+            return output;
+          }
+        }
+
+        static LeakyRelu = class {
+          constructor(alpha) {
+            this.alpha = alpha;
+          }
+
+          compute(z) {
+            const output = new Float32Array(z.length);
+            for (let j = 0; j < z.length; j++) {
+              const x = z[j];
+              output[j] = x > 0 ? x : this.alpha * x;
+            }
+            return output;
+          }
+
+          derivative(z) {
+            const output = new Float32Array(z.length);
+            for (let j = 0; j < z.length; j++) {
+              const x = z[j];
+              output[j] = x > 0 ? 1 : this.alpha;
+            }
+            return output;
+          }
+        }
+
+        static TanH = class {
+          compute(z) {
+            const output = new Float32Array(z.length);
+            for (let j = 0; j < z.length; j++) {
+              const x = z[j];
+              output[j] = 1 / (1 + Math.exp(-2 * x)) * 2 - 1;
+            }
+            return output;
+          }
+
+          derivative(z) {
+            const output = new Float32Array(z.length);
+            for (let j = 0; j < z.length; j++) {
+              const x = z[j];
+              const t = 1 / (1 + Math.exp(-2 * x)) * 2 - 1;
+              output[j] = 1 - t * t;
+            }
+            return output;
+          }
+        }
+      }
+
+      static Loss = class {
+        static MeanSquaredError = class {
+          compute(a, y) {
+            let output = 0;
+            for (let j = 0; j < a.length; j++) {
+              const difference = a[j] - y[j];
+              output += difference * difference;
+            }
+            return 0.5 * output;
+          }
+
+          derivative(a, y) {
+            const output = new Float32Array(a.length);
+            for (let j = 0; j < a.length; j++) {
+              output[j] = a[j] - y[j];
+            }
+            return output;
+          }
+        }
+      }
+
+      static WeightInitializer = class {
+        static Xavier = class {
+          set(weights, layer_sizes) {
+            for (let l = 1; l < layer_sizes.length; l++) {
+              const stddev = Math.sqrt(1 / layer_sizes[l - 1]);
+
+              for (let k = 0; k < layer_sizes[l - 1]; k++) {
+                for (let j = 0; j < layer_sizes[l]; j++) {
+                  weights[l - 1][k][j] = Random.normal() * stddev;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      static BiasInitializer = class {
+        static Zero = class {
+          set(biases, layer_sizes) {
+            for (let l = 1; l < layer_sizes.length; l++) {
+              for (let k = 0; k < layer_sizes[l]; k++) {
+                biases[l - 1][k] = 0;
+              }
+            }
+          }
+        }
+      }
+
+      static Model = class {
+        constructor(layer_sizes, activation, output_activation, weight_initializer, bias_initializer) {
+          this.layer_sizes = layer_sizes;
+          this.activation = activation;
+          this.output_activation = output_activation;
+          this.weight_initializer = weight_initializer;
+          this.bias_initializer = bias_initializer;
+
+          this.num_layers = this.layer_sizes.length;
+          this.weights = [];
+          this.biases = [];
+          this.gradient_w = [];
+          this.gradient_b = [];
+
+          for (let l = 1; l < this.num_layers; l++) {
+            const weights_row = [];
+            const gradient_w_row = [];
+
+            for (let k = 0; k < this.layer_sizes[l - 1]; k++) {
+              weights_row.push(new Float32Array(this.layer_sizes[l]));
+              gradient_w_row.push(new Float32Array(this.layer_sizes[l]));
+            }
+
+            this.weights.push(weights_row);
+            this.gradient_w.push(gradient_w_row);
+          }
+
+          for (let l = 1; l < this.num_layers; l++) {
+            this.biases.push(new Float32Array(this.layer_sizes[l]));
+            this.gradient_b.push(new Float32Array(this.layer_sizes[l]));
+          }
+        }
+
+        initialize() {
+          this.weight_initializer.set(this.weights, this.layer_sizes);
+          this.bias_initializer.set(this.biases, this.layer_sizes);
+        }
+
+        feed_forward(x) {
+          let a = x;
+
+          for (let l = 1; l < this.num_layers; l++) {
+            const z = new Float32Array(this.layer_sizes[l]);
+
+            for (let j = 0; j < this.layer_sizes[l]; j++) {
+              let sum = 0;
+              for (let k = 0; k < this.layer_sizes[l - 1]; k++) {
+                sum += a[k] * this.weights[l - 1][k][j];
+              }
+              z[j] = sum;
+            }
+
+            for (let j = 0; j < this.layer_sizes[l]; j++) {
+              z[j] += this.biases[l - 1][j];
+            }
+
+            a = l !== this.num_layers - 1 ? this.activation.compute(z) : this.output_activation.compute(z);
+          }
+
+          return a;
+        }
+
+        back_propagate(x, y, loss) {
+          let a = x;
+          const zs = new Array(this.num_layers);
+          const activations = new Array(this.num_layers);
+
+          activations[0] = a;
+
+          for (let l = 1; l < this.num_layers; l++) {
+            const z = new Float32Array(this.layer_sizes[l]);
+
+            for (let j = 0; j < this.layer_sizes[l]; j++) {
+              let sum = 0;
+              for (let k = 0; k < this.layer_sizes[l - 1]; k++) {
+                sum += a[k] * this.weights[l - 1][k][j];
+              }
+              z[j] = sum;
+            }
+
+            for (let j = 0; j < this.layer_sizes[l]; j++) {
+              z[j] += this.biases[l - 1][j];
+            }
+
+            a = l !== this.num_layers - 1 ? this.activation.compute(z) : this.output_activation.compute(z);
+
+            zs[l] = z;
+            activations[l] = a;
+          }
+
+          const error = new Array(this.num_layers);
+
+          const loss_gradients = loss.derivative(activations[this.num_layers - 1], y);
+          const activation_gradients = this.output_activation.derivative(zs[this.num_layers - 1]);
+
+          error[this.num_layers - 1] = new Float32Array(this.layer_sizes[this.num_layers - 1]);
+
+          for (let j = 0; j < this.layer_sizes[this.num_layers - 1]; j++) {
+            error[this.num_layers - 1][j] = loss_gradients[j] * activation_gradients[j];
+          }
+
+          for (let l = this.num_layers - 2; l >= 1; l--) {
+            const delta = new Float32Array(this.layer_sizes[l]);
+
+            for (let j = 0; j < this.layer_sizes[l]; j++) {
+              let sum = 0;
+
+              for (let m = 0; m < this.layer_sizes[l + 1]; m++) {
+                sum += this.weights[l][j][m] * error[l + 1][m];
+              }
+
+              delta[j] = sum;
+            }
+
+            const activation_gradients = this.activation.derivative(zs[l]);
+
+            for (let j = 0; j < delta.length; j++) {
+              delta[j] *= activation_gradients[j];
+            }
+
+            error[l] = delta;
+          }
+
+          for (let l = 1; l < this.num_layers; l++) {
+            for (let k = 0; k < this.layer_sizes[l - 1]; k++) {
+              for (let j = 0; j < this.layer_sizes[l]; j++) {
+                this.gradient_w[l - 1][k][j] += activations[l - 1][k] * error[l][j];
+              }
+            }
+
+            for (let j = 0; j < this.layer_sizes[l]; j++) {
+              this.gradient_b[l - 1][j] += error[l][j];
+            }
+          }
+        }
+
+        zero_gradients() {
+          for (let l = 1; l < this.num_layers; l++) {
+            for (let k = 0; k < this.layer_sizes[l - 1]; k++) {
+              for (let j = 0; j < this.layer_sizes[l]; j++) {
+                this.gradient_w[l - 1][k][j] = 0;
+              }
+            }
+
+            for (let j = 0; j < this.layer_sizes[l]; j++) {
+              this.gradient_b[l - 1][j] = 0;
+            }
+          }
+        }
+      }
+
+      static Optimizer = class {
+        static GradientDescent = class {
+          constructor(model, eta) {
+            this.model = model;
+            this.eta = eta;
+          }
+
+          step() {
+            for (let l = 1; l < this.model.num_layers; l++) {
+              for (let k = 0; k < this.model.layer_sizes[l - 1]; k++) {
+                for (let j = 0; j < this.model.layer_sizes[l]; j++) {
+                  this.model.weights[l - 1][k][j] -= this.eta * this.model.gradient_w[l - 1][k][j];
+                }
+              }
+
+              for (let j = 0; j < this.model.layer_sizes[l]; j++) {
+                this.model.biases[l - 1][j] -= this.eta * this.model.gradient_b[l - 1][j];
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const Plotter = class {
+      constructor(canvas, width, height, min_x, min_y, max_x, max_y, point_radius, line_width, text_size) {
+        this.canvas = canvas;
+        this.width = width;
+        this.height = height;
+        this.min_x = min_x;
+        this.min_y = min_y;
+        this.max_x = max_x;
+        this.max_y = max_y;
+        this.point_radius = point_radius;
+        this.line_width = line_width;
+        this.text_size = text_size;
+
+        this.canvas.width = this.width * 4;
+        this.canvas.height = this.height * 4;
+        this.canvas.style.width = this.width + "px";
+        this.canvas.style.height = this.height + "px";
+        this.context = this.canvas.getContext('2d');
+        this.context.lineWidth = this.line_width;
+        this.context.textAlign = "left";
+        this.context.textBaseline = "top";
+        this.context.scale(4, 4);
+      }
+
+      screen_space_x(x) {
+        return (x - this.min_x) / (this.max_x - this.min_x) * this.width;
+      }
+
+      screen_space_y(y) {
+        return this.height - (y - this.min_y) / (this.max_y - this.min_y) * this.height;
+      }
+
+      clear(color) {
+        this.context.fillStyle = color;
+        this.context.fillRect(0, 0, this.width, this.height);
+      }
+
+      point(x, y, color) {
+        this.context.fillStyle = color;
+        this.context.beginPath();
+        this.context.arc(this.screen_space_x(x), this.screen_space_y(y), this.point_radius, 0, Math.PI * 2);
+        this.context.fill();
+      }
+
+      line(x1, y1, x2, y2, color) {
+        this.context.strokeStyle = color;
+        this.context.beginPath();
+        this.context.moveTo(this.screen_space_x(x1), this.screen_space_y(y1));
+        this.context.lineTo(this.screen_space_x(x2), this.screen_space_y(y2));
+        this.context.closePath();
+        this.context.stroke();
+      }
+
+      vwidth_line(x1, y1, x2, y2, color, width) {
+        this.context.lineWidth = width;
+        this.context.strokeStyle = color;
+        this.context.beginPath();
+        this.context.moveTo(this.screen_space_x(x1), this.screen_space_y(y1));
+        this.context.lineTo(this.screen_space_x(x2), this.screen_space_y(y2));
+        this.context.closePath();
+        this.context.stroke();
+        this.context.lineWidth = this.line_width;
+      }
+
+      text(x, y, text, color) {
+        this.context.font = `100 ${this.text_size}px monospace`;
+        this.context.fillStyle = color;
+        this.context.fillText(text, this.screen_space_x(x), this.screen_space_y(y));
+      }
+    }
+
+    //
+
+    let target_function = x => Math.sin(x) * Math.sin(x * x);
+    let num_target_function_points = 256;
+    let num_prediction_points = 256;
+    let model_middle_layers = [8, 8];
+    let model_activation = new MachineLearning.Activation.LeakyRelu(0.1);
+    let optimizer_eta = 0.03;
+    let num_learning_steps_per_frame = 10;
+
+    //
+
+    let model = new MachineLearning.Model(
+      [1, ...model_middle_layers, 1],
+      model_activation,
+      new MachineLearning.Activation.Linear(),
+      new MachineLearning.WeightInitializer.Xavier(),
+      new MachineLearning.BiasInitializer.Zero()
+    );
+    let loss = new MachineLearning.Loss.MeanSquaredError();
+    let optimizer = new MachineLearning.Optimizer.GradientDescent(model, optimizer_eta)
+
+    let target_function_x = new Array();
+    let target_function_y = new Array();
+    let shuffled_indicies = new Array();
+    let predictions_x = new Array();
+    let predictions_y = new Array(num_prediction_points);
+
+    let snapshot_counter = 0;
+    let predictions_y_snapshot_old = new Array(num_prediction_points).fill([0]);
+    let predictions_y_snapshot_new = new Array(num_prediction_points).fill([0]);
+
+    for (let i = 0; i < num_target_function_points; i++) {
+      x_value = (Math.random() * 2 - 1) * Math.PI;
+
+      target_function_x.push([x_value]);
+
+      target_function_y.push([target_function(x_value)]);
+
+      shuffled_indicies.push(i);
+    }
+
+    for (let i = 0; i < num_prediction_points; i++) {
+      x_value = (i + 0.5) / num_prediction_points * Math.PI * 2 - Math.PI;
+
+      predictions_x.push([x_value]);
+    }
+
+    model.initialize();
+
+    const function_visual = new Plotter(
+      document.querySelector('#function_visual'),
+      16 * 64,
+      10 * 32,
+      -(Math.PI + 0.2),
+      -1.5,
+      Math.PI + 0.2,
+      1.2,
+      3,
+      1.2,
+      14
+    );
+
+    const model_visual = new Plotter(
+      document.querySelector('#model_visual'),
+      16 * 32,
+      10 * 32,
+      -1,
+      -1,
+      1,
+      1,
+      3,
+      1.5,
+      14
+    );
+
+    const activation_visual = new Plotter(
+      document.querySelector('#activation_visual'),
+      16 * 32,
+      10 * 32,
+      -4,
+      -4,
+      4,
+      4,
+      3,
+      1.5,
+      14
+    );
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function run() {
+      Random.shuffle(shuffled_indicies);
+
+      for (let j = 0; j < num_learning_steps_per_frame; j++) {
+        for (let i = 0; i < num_target_function_points; i++) {
+          model.back_propagate(target_function_x[shuffled_indicies[i]], target_function_y[shuffled_indicies[i]], loss);
+          optimizer.step();
+          model.zero_gradients();
+        }
+      }
+
+      for (let i = 0; i < num_prediction_points; i++) {
+        predictions_y[i] = model.feed_forward(predictions_x[i]);
+      }
+
+      if (snapshot_counter == 0) {
+        for (let i = 0; i < num_prediction_points; i++) {
+          if (predictions_y_snapshot_new[i] != [0]) {
+            predictions_y_snapshot_old[i] = predictions_y_snapshot_new[i];
+          }
+          predictions_y_snapshot_new[i] = predictions_y[i];
+        }
+
+        for (let i = 0; i < num_target_function_points; i++) {
+          let prediction_y = model.feed_forward(predictions_x[i]);
+        }
+
+        model_visual.clear('#323348');
+
+        let largest_layer_size = 0;
+        for (let i = 0; i < model.layer_sizes.length; i++) {
+          largest_layer_size = Math.max(largest_layer_size, model.layer_sizes[i]);
+        }
+
+        for (let i = 1; i < model.layer_sizes.length; i++) {
+          let first_x = (i - 1 + 0.5) / model.layer_sizes.length * 2 - 1;
+          let next_x = (i + 0.5) / model.layer_sizes.length * 2 - 1;
+
+          for (let j = 0; j < model.layer_sizes[i - 1]; j++) {
+            let first_y = ((j + 0.5) / model.layer_sizes[i - 1] * 2 - 1) * (model.layer_sizes[i - 1] / largest_layer_size);
+
+            for (let k = 0; k < model.layer_sizes[i]; k++) {
+              let next_y = ((k + 0.5) / model.layer_sizes[i] * 2 - 1) * (model.layer_sizes[i] / largest_layer_size);
+
+              let weight = model.weights[i - 1][j][k] * 10;
+
+              let color1 = `rgb(238, 134, 158)`;
+              let color2 = `rgb(118, 149, 217)`;
+
+              model_visual.vwidth_line(
+                first_x,
+                first_y,
+                next_x,
+                next_y,
+                weight >= 0 ? color1 : color2,
+                Math.abs(weight) * 0.2,
+              );
+            }
+          }
+        }
+
+        for (let i = 0; i < model.layer_sizes.length; i++) {
+          let x = (i + 0.5) / model.layer_sizes.length * 2 - 1;
+
+          for (let j = 0; j < model.layer_sizes[i]; j++) {
+            let y = ((j + 0.5) / model.layer_sizes[i] * 2 - 1) * (model.layer_sizes[i] / largest_layer_size);
+
+            model_visual.point(x, y, '#d9b7d8');
+          }
+        }
+
+        model_visual.text(
+          -1,
+          1,
+          "Model",
+          '#d9b7d8'
+        );
+
+        snapshot_counter = 10;
+
+
+      }
+
+      snapshot_counter--;
+
+      function_visual.clear('#323348');
+
+      function_visual.line(
+        -Math.PI,
+        0,
+        Math.PI,
+        0,
+        '#3f4873'
+      );
+
+      function_visual.line(
+        0,
+        -1,
+        0,
+        1,
+        '#3f4873'
+      );
+
+      for (let i = 0; i < num_target_function_points; i++) {
+        function_visual.point(
+          target_function_x[i][0],
+          target_function_y[i][0],
+          '#7695d9'
+        );
+      }
+
+      for (let i = 1; i < num_prediction_points; i++) {
+        function_visual.line(
+          predictions_x[i - 1][0],
+          lerp(predictions_y_snapshot_new[i - 1][0], predictions_y_snapshot_old[i - 1][0], snapshot_counter / 10),
+          predictions_x[i][0],
+          lerp(predictions_y_snapshot_new[i][0], predictions_y_snapshot_old[i][0], snapshot_counter / 10),
+          '#ee869e'
+        );
+      }
+
+      function_visual.text(
+        -(Math.PI + 0.2),
+        1 + 0.2,
+        "Function",
+        '#d9b7d8'
+      );
+      function_visual.text(
+        0,
+        0,
+        "(0, 0)",
+        '#d9b7d8'
+      );
+      function_visual.text(
+        -(Math.PI + 0.1),
+        0,
+        "-π",
+        '#d9b7d8'
+      );
+      function_visual.text(
+        Math.PI + 0.05,
+        0,
+        "π",
+        '#d9b7d8'
+      );
+      function_visual.text(
+        0,
+        -(1 + 0.05),
+        "-1",
+        '#d9b7d8'
+      );
+      function_visual.text(
+        0,
+        1 + 0.1,
+        "1",
+        '#d9b7d8'
+      );
+
+      requestAnimationFrame(run);
+    }
+
+    function visualize_activation() {
+      activation_visual.clear('#323348');
+
+      activation_visual.line(
+        -4,
+        0,
+        4,
+        0,
+        '#3f4873'
+      );
+
+      activation_visual.line(
+        0,
+        -4,
+        0,
+        4,
+        '#3f4873'
+      );
+
+      for (let i = 1; i < 128; i++) {
+        let first_x = ((i - 1 + 0.5) / 128 * 2 - 1) * 4;
+        let next_x = ((i + 0.5) / 128 * 2 - 1) * 4;
+
+        let first_y = model_activation.compute([first_x])[0];
+        let next_y = model_activation.compute([next_x])[0];
+
+        activation_visual.line(
+          first_x,
+          first_y,
+          next_x,
+          next_y,
+          '#ee869e'
+        );
+      }
+
+      activation_visual.text(
+        -4,
+        4,
+        "Activation",
+        '#d9b7d8'
+      );
+    }
+
+    run();
+    visualize_activation();
+
+  </script>
+</body>
+
+</html>
